@@ -1,5 +1,6 @@
 from dash import Dash, dcc, html, Input, Output, State, callback_context
 import plotly.graph_objects as go  # pyright: ignore[reportMissingTypeStubs]
+from dash.exceptions import PreventUpdate
 
 from src.models import ConsensusData
 from src.visualizer.figure_builder import FigureBuilder
@@ -190,14 +191,26 @@ class DashApp:
             style={"maxWidth": "1500px", "margin": "0 auto"},
         )
 
+    @staticmethod
+    def _update_selection_from_click(
+            clickData: dict[str, list[dict[str, int | dict[str, int] | list[str | int]]]] | None,
+            group: str,
+    ) -> dict[str, str | int]:
+        if not clickData:
+            raise PreventUpdate
+
+        cd = clickData["points"][0].get("customdata")
+        if cd and isinstance(cd, list) and len(cd) >= 2 and cd[0] == group:
+            return {"valgroup_id": group, "slot": int(cd[1])}
+
+        raise PreventUpdate
+
     def _update_summary(
         self,
         group: str,
         slot_from: int | None,
         slot_to: int | None,
         show_empty_v: list[str] | None,
-        clickData: dict[str, list[dict[str, int | dict[str, int] | list[str | int]]]]
-        | None,
         selected: dict[str, str | int],
     ) -> tuple[go.Figure, dict[str, str | int]]:
         slot_from = slot_from or 0
@@ -211,11 +224,6 @@ class DashApp:
             slot_to = slot_from
 
         show_empty = "yes" in (show_empty_v or [])
-
-        if clickData:
-            cd = clickData["points"][0].get("customdata")
-            if cd and isinstance(cd, list) and len(cd) >= 2 and cd[0] == group:
-                selected = {"valgroup_id": group, "slot": int(cd[1])}
 
         slots = [
             s
@@ -283,9 +291,15 @@ class DashApp:
             Input("slot-from", "value"),
             Input("slot-to", "value"),
             Input("show-empty", "value"),
-            Input("summary", "clickData"),
             State("selected", "data"),
         )(self._update_summary)
+
+        self.app.callback(  # pyright: ignore[reportUnknownMemberType]
+            Output("selected", "data", allow_duplicate=True),
+            Input("summary", "clickData"),
+            State("group", "value"),
+            prevent_initial_call=True,
+        )(self._update_selection_from_click)
 
         self.app.callback(  # pyright: ignore[reportUnknownMemberType]
             Output("detail", "figure"),
