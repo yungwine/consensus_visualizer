@@ -9,7 +9,7 @@ def to_datetime(t_ms: float) -> datetime:
 
 
 def to_relative(t_ms: float, base_ms: float) -> float:
-    return t_ms - base_ms
+    return round(t_ms - base_ms, 6)
 
 
 class DataFilter:
@@ -116,7 +116,7 @@ class SummaryFigureBuilder:
         for label in sorted(markers_by_label.keys()):
             events = markers_by_label[label]
             fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
-                go.Scattergl(
+                go.Scatter(
                     x=[to_datetime(e.t_ms) for e in events],
                     y=[str(e.slot) for e in events],
                     mode="markers",
@@ -127,8 +127,8 @@ class SummaryFigureBuilder:
                     ),
                     name=label,
                     legendgroup=f"m:{label}",
-                    customdata=[[self.valgroup_id, e.slot] for e in events],
-                    hovertemplate=f"valgroup={self.valgroup_id}<br>slot=%{{customdata[1]}}<br>marker={label}<br>t=%{{x|%H:%M:%S.%L}}<extra></extra>",
+                    customdata=[[self.valgroup_id, e.slot, to_datetime(e.t_ms).strftime("%H:%M:%S.%f")] for e in events],
+                    hovertemplate=f"valgroup={self.valgroup_id}<br>slot=%{{customdata[1]}}<br>marker={label}<br>t=%{{customdata[2]}}<extra></extra>",
                 )
             )
 
@@ -183,9 +183,6 @@ class DetailFigureBuilder:
     def _add_baseline_markers(
         fig: go.Figure, markers: list[EventData], time_mode: str, slot_start: float
     ) -> None:
-        x_part = "%{x}" if time_mode == "abs" else "dt=%{x}ms"
-        hover_template = f"slot: %{{meta}}<br>{x_part}<extra></extra>"
-
         for m in markers:
             x = (
                 to_datetime(m.t_ms)
@@ -195,7 +192,7 @@ class DetailFigureBuilder:
 
             fig = fig.add_vline(x=x, line_width=1, line_dash="dot")  # pyright: ignore[reportUnknownMemberType]
             fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
-                go.Scattergl(
+                go.Scatter(
                     x=[x],
                     y=["__slot__"],
                     mode="markers",
@@ -207,8 +204,14 @@ class DetailFigureBuilder:
                     name=m.label,
                     legendgroup=f"slot:{m.label}",
                     showlegend=True,
-                    meta=m.label,
-                    hovertemplate=hover_template,
+                    customdata=[[m.label, x]],
+                    hovertemplate="slot: %{customdata[0]}<br>"
+                                  + (
+                                    "t=%{customdata[1]|%H:%M:%S.%f}<br>"
+                                    if time_mode == "abs"
+                                    else "t=%{customdata[1]}ms<br>"
+                                    )
+                                    +"<extra></extra>",
                 )
             )
 
@@ -300,19 +303,10 @@ class DetailFigureBuilder:
                         label,
                         e.kind,
                         e.t1_ms - e.t_ms if e.t1_ms else 0,
+                        b
                     ]
-                    for e in label_events
+                    for e, b in zip(label_events, base)
                 ],
-                hovertemplate=(
-                    f"valgroup={self.valgroup_id}<br>slot={self.slot}<br>"
-                    + f"validator=%{{customdata[2]}}<br>event={label} (kind=%{{customdata[4]}})<br>"
-                    + (
-                        "start=%{base|%H:%M:%S.%f}<br>"
-                        if time_mode == "abs"
-                        else "start=%{base}ms<br>"
-                    )
-                    + "dt=%{customdata[5]:.3f}ms<extra></extra>"
-                ),
             )
 
             if label not in ("skip_observed", "candidate_received"):
@@ -323,12 +317,22 @@ class DetailFigureBuilder:
                         x=x,
                         y=[e.validator for e in label_events],
                         marker=dict(color=label_events[0].get_color()),
+                        hovertemplate=(
+                            f"valgroup={self.valgroup_id}<br>slot={self.slot}<br>"
+                            + f"validator=%{{customdata[2]}}<br>event={label} (kind=%{{customdata[4]}})<br>"
+                            + (
+                                "start=%{base|%H:%M:%S.%f}<br>"
+                                if time_mode == "abs"
+                                else "start=%{base}ms<br>"
+                            )
+                            + "dt=%{customdata[5]:.3f}ms<extra></extra>"
+                        ),
                         **kwargs,
                     )
                 )
             else:
                 fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
-                    go.Scattergl(
+                    go.Scatter(
                         x=base,
                         y=[e.validator for e in label_events],
                         mode="markers",
@@ -336,6 +340,15 @@ class DetailFigureBuilder:
                             size=10,
                             symbol=label_events[0].get_symbol(),
                             color=label_events[0].get_color(),
+                        ),
+                        hovertemplate=(
+                            f"valgroup={self.valgroup_id}<br>slot={self.slot}<br>"
+                            + f"validator=%{{customdata[2]}}<br>event={label} (kind=%{{customdata[4]}})<br>"
+                            + (
+                                "t=%{customdata[6]|%H:%M:%S.%f}<br><extra></extra>"
+                                if time_mode == "abs"
+                                else "t=%{x}ms<br><extra></extra>"
+                            )
                         ),
                         **kwargs,
                     )
