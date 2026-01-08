@@ -147,6 +147,7 @@ class SummaryFigureBuilder:
                 tickmode="auto",
                 nticks=25,
             ),
+            dragmode="pan",
         )
 
 
@@ -375,6 +376,7 @@ class DetailFigureBuilder:
                 categoryarray=["__slot__"] + validators,
             ),
             margin=dict(l=130, r=20, t=60, b=55),
+            dragmode="pan",
         )
 
 
