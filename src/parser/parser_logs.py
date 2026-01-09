@@ -85,7 +85,6 @@ class ParserLogs(Parser):
                     label="finalize_observed_by_next_leader",
                     kind="observed",
                     t_ms=t_ms,
-                    validator=v_id,
                     t1_ms=None,
                 )
             )
@@ -172,7 +171,7 @@ class ParserLogs(Parser):
                     valgroup_id=slot_data.valgroup_id,
                     slot=slot_data.slot,
                     label="slot_start_est",
-                    kind="local",
+                    kind="estimate",
                     t_ms=slot_data.slot_start_est_ms,
                 )
             )

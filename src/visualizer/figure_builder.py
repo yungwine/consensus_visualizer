@@ -73,6 +73,7 @@ class DataFilter:
 class SummaryFigureBuilder:
     def __init__(self, valgroup_id: str):
         self.valgroup_id: str = valgroup_id
+        self.fig = go.Figure()
 
     def build(
         self,
@@ -81,18 +82,17 @@ class SummaryFigureBuilder:
         slot_from: int,
         slot_to: int,
     ) -> go.Figure:
-        fig = go.Figure()
-        self._add_bars(fig, segments)
-        self._add_markers(fig, markers)
-        self._configure_layout(fig, slot_from, slot_to)
-        return fig
+        self._add_bars(segments)
+        self._add_markers(markers)
+        self._configure_layout(slot_from, slot_to)
+        return self.fig
 
-    def _add_bars(self, fig: go.Figure, segments: list[EventData]) -> None:
+    def _add_bars(self, segments: list[EventData]) -> None:
         events_by_label = DataFilter.group_events_by_label(segments)
 
         for label in sorted(events_by_label.keys()):
             events = events_by_label[label]
-            fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+            _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                 go.Bar(
                     orientation="h",
                     y=[str(e.slot) for e in events],
@@ -108,14 +108,14 @@ class SummaryFigureBuilder:
                 )
             )
 
-    def _add_markers(self, fig: go.Figure, markers: list[EventData]) -> None:
+    def _add_markers(self, markers: list[EventData]) -> None:
         markers_by_label: dict[str, list[EventData]] = {}
         for m in markers:
             markers_by_label.setdefault(m.label, []).append(m)
 
         for label in sorted(markers_by_label.keys()):
             events = markers_by_label[label]
-            fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+            _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                 go.Scatter(
                     x=[to_datetime(e.t_ms) for e in events],
                     y=[str(e.slot) for e in events],
@@ -132,9 +132,8 @@ class SummaryFigureBuilder:
                 )
             )
 
-    @staticmethod
-    def _configure_layout(fig: go.Figure, slot_from: int, slot_to: int) -> None:
-        _ = fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
+    def _configure_layout(self, slot_from: int, slot_to: int) -> None:
+        _ = self.fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
             height=600,
             barmode="overlay",
             bargap=0.25,
@@ -152,46 +151,35 @@ class SummaryFigureBuilder:
 
 
 class DetailFigureBuilder:
-    def __init__(self, valgroup_id: str, slot: int):
+    def __init__(self, valgroup_id: str, slot: SlotData, time_mode: str):
         self.valgroup_id: str = valgroup_id
-        self.slot: int = slot
+        self.slot: SlotData = slot
+        self.time_mode: str = time_mode
+        self.fig = go.Figure()
 
     def build(
         self,
-        slot_data: SlotData,
         events: list[EventData],
         markers: list[EventData],
-        time_mode: str,
     ) -> go.Figure:
-        slot_start_ms = self._get_slot_start(markers, events)
-        x_title = "t - slot_start_est (ms)" if time_mode == "rel" else "Time (UTC)"
 
-        fig = go.Figure()
-        self._add_baseline_markers(fig, markers, time_mode, slot_start_ms)
-        self._add_validator_events(fig, events, time_mode, slot_start_ms)
-        self._configure_layout(fig, slot_data, events, x_title, time_mode)
-        return fig
+        self._add_baseline_markers(markers)
+        self._add_validator_events(events)
+        self._configure_layout(events)
+        return self.fig
 
-    @staticmethod
-    def _get_slot_start(markers: list[EventData], events: list[EventData]) -> float:
-        for m in markers:
-            if m.label == "slot_start_est":
-                return m.t_ms
-        return min(e.t_ms for e in events) if events else 0
-
-    @staticmethod
     def _add_baseline_markers(
-        fig: go.Figure, markers: list[EventData], time_mode: str, slot_start: float
+        self, markers: list[EventData]
     ) -> None:
         for m in markers:
             x = (
                 to_datetime(m.t_ms)
-                if time_mode == "abs"
-                else to_relative(m.t_ms, slot_start)
+                if self.time_mode == "abs"
+                else to_relative(m.t_ms, self.slot.slot_start_est_ms)
             )
 
-            fig = fig.add_vline(x=x, line_width=1, line_dash="dot")  # pyright: ignore[reportUnknownMemberType]
-            fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+            self.fig = self.fig.add_vline(x=x, line_width=1, line_dash="dot")  # pyright: ignore[reportUnknownMemberType]
+            self.fig = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                 go.Scatter(
                     x=[x],
                     y=["__slot__"],
@@ -208,7 +196,7 @@ class DetailFigureBuilder:
                     hovertemplate="slot: %{customdata[0]}<br>"
                                   + (
                                     "t=%{customdata[1]|%H:%M:%S.%f}<br>"
-                                    if time_mode == "abs"
+                                    if self.time_mode == "abs"
                                     else "t=%{customdata[1]}ms<br>"
                                     )
                                     +"<extra></extra>",
@@ -269,7 +257,7 @@ class DetailFigureBuilder:
         return inferred_events
 
     def _add_validator_events(
-        self, fig: go.Figure, events: list[EventData], time_mode: str, slot_start: float
+        self, events: list[EventData]
     ) -> None:
         inferred_events = self._infer_continuous_events(events)
         events_by_label = DataFilter.group_events_by_label(events + inferred_events)
@@ -285,11 +273,11 @@ class DetailFigureBuilder:
                 continue
             label_events = events_by_label[label]
 
-            if time_mode == "abs":
+            if self.time_mode == "abs":
                 base = [to_datetime(e.t_ms) for e in label_events]
                 x = [e.t1_ms - e.t_ms if e.t1_ms else 0 for e in label_events]
             else:
-                base = [to_relative(e.t_ms, slot_start) for e in label_events]
+                base = [to_relative(e.t_ms, self.slot.slot_start_est_ms) for e in label_events]
                 x = [e.t1_ms - e.t_ms if e.t1_ms else 0 for e in label_events]
 
             kwargs = dict(
@@ -298,7 +286,7 @@ class DetailFigureBuilder:
                 customdata=[
                     [
                         self.valgroup_id,
-                        self.slot,
+                        self.slot.slot,
                         e.validator,
                         label,
                         e.kind,
@@ -310,7 +298,7 @@ class DetailFigureBuilder:
             )
 
             if label not in ("skip_observed", "candidate_received"):
-                fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+                _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                     go.Bar(
                         orientation="h",
                         base=base,
@@ -318,11 +306,11 @@ class DetailFigureBuilder:
                         y=[e.validator for e in label_events],
                         marker=dict(color=label_events[0].get_color()),
                         hovertemplate=(
-                            f"valgroup={self.valgroup_id}<br>slot={self.slot}<br>"
+                            f"valgroup={self.valgroup_id}<br>slot={self.slot.slot}<br>"
                             + f"validator=%{{customdata[2]}}<br>event={label} (kind=%{{customdata[4]}})<br>"
                             + (
                                 "start=%{base|%H:%M:%S.%f}<br>"
-                                if time_mode == "abs"
+                                if self.time_mode == "abs"
                                 else "start=%{base}ms<br>"
                             )
                             + "dt=%{customdata[5]:.3f}ms<extra></extra>"
@@ -331,7 +319,7 @@ class DetailFigureBuilder:
                     )
                 )
             else:
-                fig = fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+                _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                     go.Scatter(
                         x=base,
                         y=[e.validator for e in label_events],
@@ -342,11 +330,11 @@ class DetailFigureBuilder:
                             color=label_events[0].get_color(),
                         ),
                         hovertemplate=(
-                            f"valgroup={self.valgroup_id}<br>slot={self.slot}<br>"
+                            f"valgroup={self.valgroup_id}<br>slot={self.slot.slot}<br>"
                             + f"validator=%{{customdata[2]}}<br>event={label} (kind=%{{customdata[4]}})<br>"
                             + (
                                 "t=%{customdata[6]|%H:%M:%S.%f}<br><extra></extra>"
-                                if time_mode == "abs"
+                                if self.time_mode == "abs"
                                 else "t=%{x}ms<br><extra></extra>"
                             )
                         ),
@@ -356,31 +344,28 @@ class DetailFigureBuilder:
 
     def _configure_layout(
         self,
-        fig: go.Figure,
-        slot_data: SlotData,
         events: list[EventData],
-        x_title: str,
-        time_mode: str,
     ) -> None:
-        title_parts = [f"Detail — ({self.valgroup_id}) slot {self.slot}"]
-        if slot_data.is_empty:
+        title_parts = [f"Detail — ({self.valgroup_id}) slot {self.slot.slot}"]
+        if self.slot.is_empty:
             title_parts.append("empty")
-        if slot_data.block_id:
-            title_parts.append(f"block={slot_data.block_id}")
-        if slot_data.collator is not None:
-            title_parts.append(f"collator={slot_data.collator}")
+        if self.slot.block_id:
+            title_parts.append(f"block={self.slot.block_id}")
+        if self.slot.collator is not None:
+            title_parts.append(f"collator={self.slot.collator}")
 
         validators = sorted({e.validator for e in events if e.validator is not None})
+        x_title = "t - slot_start_est (ms)" if self.time_mode == "rel" else "Time (UTC)"
 
-        _ = fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
+        _ = self.fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
             title=" · ".join(title_parts),
             height=820,
             hovermode="closest",
             barmode="overlay",
             xaxis=dict(
                 title=x_title,
-                type="date" if time_mode == "abs" else "linear",
-                rangeslider=dict(visible=True) if time_mode == "abs" else None,
+                type="date" if self.time_mode == "abs" else "linear",
+                rangeslider=dict(visible=True) if self.time_mode == "abs" else None,
             ),
             yaxis=dict(
                 title="Validator",
@@ -417,7 +402,8 @@ class FigureBuilder:
         markers = self.filter.filter_events(
             valgroup_id=valgroup_id,
             slots=slot_set,
-            labels={"slot_start_est", "finalize_observed_by_next_leader"},
+            has_validator=False,
+            kinds={"estimate", "observed"},
         )
 
         builder = SummaryFigureBuilder(valgroup_id)
@@ -451,18 +437,12 @@ class FigureBuilder:
         if event_labels:
             events = [e for e in events if e.label in event_labels]
 
-        marker_labels = {
-            "slot_start_est",
-            "finalize_observed_by_next_leader",
-            "skip_reached",
-            "notarize_reached",
-            "finalize_reached",
-        }
         markers = self.filter.filter_events(
             valgroup_id=valgroup_id,
             slot=slot,
-            labels=marker_labels,
+            has_validator=False,
+            kinds={'observed', 'reached'}
         )
 
-        builder = DetailFigureBuilder(valgroup_id, slot)
-        return builder.build(slot_data, events, markers, time_mode), options
+        builder = DetailFigureBuilder(valgroup_id, slot_data, time_mode)
+        return builder.build(events, markers), options
