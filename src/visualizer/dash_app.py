@@ -1,3 +1,5 @@
+from typing import cast
+
 from dash import Dash, dcc, html, Input, Output, State, callback_context
 import plotly.graph_objects as go  # pyright: ignore[reportMissingTypeStubs]
 from dash.exceptions import PreventUpdate
@@ -130,19 +132,6 @@ class DashApp:
                                 ),
                             ]
                         ),
-                        html.Label(
-                            [
-                                "Event filter: ",
-                                dcc.Dropdown(
-                                    id="event-filter",
-                                    options=[],
-                                    value=[],
-                                    multi=True,
-                                    placeholder="(empty = show all)",
-                                    style={"minWidth": "420px"},
-                                ),
-                            ]
-                        ),
                         html.Div(
                             [
                                 html.Button(
@@ -250,16 +239,15 @@ class DashApp:
         self,
         selected: dict[str, str | int],
         time_mode: str,
-        event_filter_value: list[str] | None,
-    ) -> tuple[go.Figure, str, list[dict[str, str]]]:
+    ) -> tuple[go.Figure, str]:
         valgroup_id = selected["valgroup_id"]
         assert isinstance(valgroup_id, str)
         slot = int(selected["slot"])
 
-        fig, options = self.builder.build_detail(
-            valgroup_id, slot, event_filter_value, time_mode
+        fig = self.builder.build_detail(
+            valgroup_id, slot, time_mode
         )
-        return fig, f"selected: {valgroup_id} slot {slot}", options
+        return fig, f"selected: {valgroup_id} slot {slot}"
 
     @staticmethod
     def _navigate_slot(
@@ -272,8 +260,9 @@ class DashApp:
         if not ctx.triggered:
             return selected
 
-        assert isinstance(ctx.triggered_id, str)
-        direction = -1 if ctx.triggered_id == "prev-slot-btn" else 1
+        triggered_id = cast(str, ctx.triggered_id)
+        assert isinstance(triggered_id, str)
+        direction = -1 if triggered_id == "prev-slot-btn" else 1
 
         current_idx = int(selected["slot"])
         new_idx = current_idx + direction
@@ -304,10 +293,8 @@ class DashApp:
         self.app.callback(  # pyright: ignore[reportUnknownMemberType]
             Output("detail", "figure"),
             Output("selection", "children"),
-            Output("event-filter", "options"),
             Input("selected", "data"),
             Input("time-mode", "value"),
-            Input("event-filter", "value"),
         )(self._update_detail)
 
         self.app.callback(  # pyright: ignore[reportUnknownMemberType]

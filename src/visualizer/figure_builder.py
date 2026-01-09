@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from typing import final
+
 import plotly.graph_objects as go  # pyright: ignore[reportMissingTypeStubs]
 
 from src.models import ConsensusData, EventData, SlotData
@@ -70,6 +72,7 @@ class DataFilter:
         return result
 
 
+@final
 class SummaryFigureBuilder:
     def __init__(self, valgroup_id: str):
         self.valgroup_id: str = valgroup_id
@@ -150,6 +153,7 @@ class SummaryFigureBuilder:
         )
 
 
+@final
 class DetailFigureBuilder:
     def __init__(self, valgroup_id: str, slot: SlotData, time_mode: str):
         self.valgroup_id: str = valgroup_id
@@ -413,12 +417,11 @@ class FigureBuilder:
         self,
         valgroup_id: str,
         slot: int,
-        event_labels: list[str] | None,
         time_mode: str,
-    ) -> tuple[go.Figure, list[dict[str, str]]]:
+    ) -> go.Figure:
         slot_data = self.filter.get_slot(valgroup_id, slot)
         if not slot_data:
-            return go.Figure().update_layout(title="No slot selected"), []  # pyright: ignore[reportUnknownMemberType]
+            return go.Figure().update_layout(title="No slot selected")  # pyright: ignore[reportUnknownMemberType]
 
         events = self.filter.filter_events(
             valgroup_id=valgroup_id,
@@ -426,16 +429,10 @@ class FigureBuilder:
             has_validator=True,
         )
 
-        labels = sorted(set(e.label for e in events))
-        options = [{"label": l, "value": l} for l in labels]
-
         if not events:
             return go.Figure().update_layout(  # pyright: ignore[reportUnknownMemberType]
                 title=f"{valgroup_id} slot {slot}: no events"
-            ), options
-
-        if event_labels:
-            events = [e for e in events if e.label in event_labels]
+            )
 
         markers = self.filter.filter_events(
             valgroup_id=valgroup_id,
@@ -445,4 +442,4 @@ class FigureBuilder:
         )
 
         builder = DetailFigureBuilder(valgroup_id, slot_data, time_mode)
-        return builder.build(events, markers), options
+        return builder.build(events, markers)
