@@ -166,7 +166,6 @@ class DetailFigureBuilder:
         events: list[EventData],
         markers: list[EventData],
     ) -> go.Figure:
-
         self._add_baseline_markers(markers)
         self._add_validator_events(events)
         self._configure_layout(events)
@@ -207,64 +206,10 @@ class DetailFigureBuilder:
                 )
             )
 
-    @staticmethod
-    def _infer_continuous_events(events: list[EventData]) -> list[EventData]:
-        # group by (validator, label)
-        event_map: dict[tuple[int | str | None, str], EventData] = {}
-        for e in events:
-            event_map[(e.validator, e.label)] = e
-
-        inferred_events: list[EventData] = []
-        for e in events:
-            if e.label == "collate_started":
-                end_event = event_map.get((e.validator, "collate_finished"))
-                if end_event:
-                    inferred_events.append(
-                        EventData(
-                            valgroup_id=e.valgroup_id,
-                            slot=e.slot,
-                            validator=e.validator,
-                            label="collation",
-                            kind=e.kind,
-                            t_ms=e.t_ms,
-                            t1_ms=end_event.t_ms,
-                        )
-                    )
-            elif e.label == "validate_started":
-                end_event = event_map.get((e.validator, "validate_finished"))
-                if end_event:
-                    inferred_events.append(
-                        EventData(
-                            valgroup_id=e.valgroup_id,
-                            slot=e.slot,
-                            validator=e.validator,
-                            label="block_validation",
-                            kind=e.kind,
-                            t_ms=e.t_ms,
-                            t1_ms=end_event.t_ms,
-                        )
-                    )
-            elif e.label == "notarize_observed":
-                end_event = event_map.get((e.validator, "finalize_observed"))
-                if end_event:
-                    inferred_events.append(
-                        EventData(
-                            valgroup_id=e.valgroup_id,
-                            slot=e.slot,
-                            validator=e.validator,
-                            label="finalization",
-                            kind=e.kind,
-                            t_ms=e.t_ms,
-                            t1_ms=end_event.t_ms,
-                        )
-                    )
-        return inferred_events
-
     def _add_validator_events(
         self, events: list[EventData]
     ) -> None:
-        inferred_events = self._infer_continuous_events(events)
-        events_by_label = DataFilter.group_events_by_label(events + inferred_events)
+        events_by_label = DataFilter.group_events_by_label(events)
 
         for label in sorted(events_by_label.keys()):
             if label not in (

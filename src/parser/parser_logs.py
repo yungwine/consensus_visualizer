@@ -38,6 +38,7 @@ class ParserLogs(Parser):
         self.votes: dict[slot_id_type, dict[str, list[VoteData]]] = {}
         self.total_weights: dict[str, int] = {}
         self.slot_leaders: dict[slot_id_type, int] = {}
+        self.slot_events: dict[slot_id_type, dict[int, dict[str, EventData]]] = {}
         self.events: list[EventData] = []
 
     def _parse_stats_target_reached(
@@ -100,7 +101,10 @@ class ParserLogs(Parser):
                 validator=v_id,
                 t1_ms=None,
             )
-            self.events.append(ev)
+            self.slot_events.setdefault(slot_id, {}).setdefault(v_id, {})[label] = ev
+
+            if label == "candidate_received":
+                self.events.append(ev)
 
             if label in ("collate_started", "collate_finished"):
                 self.collated.setdefault(slot_id, {})[label] = ev
@@ -164,7 +168,27 @@ class ParserLogs(Parser):
             for s in range(start_slot, end_slot):
                 self.slot_leaders[(v_group, s)] = v_id
 
-    def _infer_slot_events(self):
+    def _infer_slot_events(self) -> None:
+        for s in self.slot_events.values():
+            for v_id, events in s.items():
+                for start_event_name, end_event_name, label in (('collate_started', 'collate_finished', 'collation'), ('validate_started', 'validate_finished', 'block_validation'), ('notarize_observed', 'finalize_observed', 'finalization')):
+                    if start_event_name not in events or end_event_name not in events:
+                        continue
+                    e = events[start_event_name]
+                    end_event = events.get(end_event_name)
+                    self.events.append(
+                        EventData(
+                            valgroup_id=e.valgroup_id,
+                            slot=e.slot,
+                            validator=e.validator,
+                            label=label,
+                            kind=e.kind,
+                            t_ms=e.t_ms,
+                            t1_ms=end_event.t_ms,
+                        )
+                    )
+
+    def _infer_slot_phases(self):
         for slot_id, slot_data in self.slots.items():
             self.events.append(
                 EventData(
@@ -342,6 +366,7 @@ class ParserLogs(Parser):
 
                 self._process_log_line(line, v_group, t_ms, v_groups, v_weights)
 
+        self._infer_slot_phases()
         self._infer_slot_events()
 
         return ConsensusData(slots=list(self.slots.values()), events=self.events)
