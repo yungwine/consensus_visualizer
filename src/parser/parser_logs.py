@@ -179,7 +179,7 @@ class ParserLogs(Parser):
 
     def _infer_slot_events(self) -> None:
         for s in self._slot_events.values():
-            for v_id, events in s.items():
+            for events in s.values():
                 for start_event_name, end_event_name, label in (
                     ("collate_started", "collate_finished", "collation"),
                     ("validate_started", "validate_finished", "block_validation"),
@@ -188,7 +188,7 @@ class ParserLogs(Parser):
                     if start_event_name not in events or end_event_name not in events:
                         continue
                     e = events[start_event_name]
-                    end_event = events.get(end_event_name)
+                    end_event = events[end_event_name]
                     self._events.append(
                         EventData(
                             valgroup_id=e.valgroup_id,
