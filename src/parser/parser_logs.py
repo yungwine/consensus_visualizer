@@ -64,7 +64,7 @@ class ParserLogs(Parser):
                 slot=slot,
                 is_empty=False,
                 slot_start_est_ms=t_ms,
-                block_id=None,
+                block_id_ext=None,
                 collator=None,
             )
 
@@ -133,7 +133,7 @@ class ParserLogs(Parser):
                 slot=slot,
                 is_empty=True,
                 slot_start_est_ms=t_ms,
-                block_id=None,
+                block_id_ext=None,
                 collator=None,
             )
         else:
@@ -167,6 +167,15 @@ class ParserLogs(Parser):
 
             for s in range(start_slot, end_slot):
                 self.slot_leaders[(v_group, s)] = v_id
+        elif "BlockFinalized" in line and not 'BlockFinalizedInMasterchain' in line:
+            slot_match = re.search(r"candidate=Candidate\{id=\{(\d+)", line)
+            assert slot_match is not None
+            slot = int(slot_match.group(1))
+            slot_id = (v_group, slot)
+            block_id_match = re.search(r"(\([^)]+\):[A-F0-9]+:[A-F0-9]+)", line)
+            assert block_id_match is not None
+            block_id = block_id_match.group(0)
+            self.slots[slot_id].block_id_ext = block_id
 
     def _infer_slot_events(self) -> None:
         for s in self.slot_events.values():

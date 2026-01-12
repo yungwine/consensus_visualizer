@@ -62,7 +62,7 @@ class ParserMock(Parser):
                         slot=slot_idx,
                         is_empty=is_empty,
                         slot_start_est_ms=self._to_ms(slot_start),
-                        block_id=None if is_empty else f"{group_id}-B{slot_idx:06d}",
+                        block_id_ext=None if is_empty else f"{group_id}-B{slot_idx:06d}",
                         collator=None
                         if is_empty
                         else validators[slot_idx % self.n_validators],

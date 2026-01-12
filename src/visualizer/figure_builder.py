@@ -74,9 +74,10 @@ class DataFilter:
 
 @final
 class SummaryFigureBuilder:
-    def __init__(self, valgroup_id: str):
+    def __init__(self, valgroup_id: str, slot_dict: dict[int, SlotData]):
         self.valgroup_id: str = valgroup_id
-        self.fig = go.Figure()
+        self._fig = go.Figure()
+        self._slot_dict = slot_dict
 
     def build(
         self,
@@ -88,14 +89,14 @@ class SummaryFigureBuilder:
         self._add_bars(segments)
         self._add_markers(markers)
         self._configure_layout(slot_from, slot_to)
-        return self.fig
+        return self._fig
 
     def _add_bars(self, segments: list[EventData]) -> None:
         events_by_label = DataFilter.group_events_by_label(segments)
 
         for label in sorted(events_by_label.keys()):
             events = events_by_label[label]
-            _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+            _ = self._fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                 go.Bar(
                     orientation="h",
                     y=[str(e.slot) for e in events],
@@ -104,10 +105,10 @@ class SummaryFigureBuilder:
                     name=label,
                     marker=dict(color=events[0].get_color()),
                     customdata=[
-                        [self.valgroup_id, e.slot, e.t1_ms - e.t_ms if e.t1_ms else 0]
+                        [self.valgroup_id, e.slot, e.t1_ms - e.t_ms if e.t1_ms else 0, self._slot_dict[e.slot].block_id()]
                         for e in events
                     ],
-                    hovertemplate=f"valgroup={self.valgroup_id}<br>slot=%{{customdata[1]}}<br>segment={label}<br>start=%{{base|%H:%M:%S.%f}}<br>dt=%{{customdata[2]:.3f}}ms<extra></extra>",
+                    hovertemplate=f"valgroup={self.valgroup_id}<br>slot=%{{customdata[1]}}<br>segment={label}<br>start=%{{base|%H:%M:%S.%f}}<br>dt=%{{customdata[2]:.3f}}ms<br>block_id=%{{customdata[3]}}<extra></extra>",
                 )
             )
 
@@ -118,7 +119,7 @@ class SummaryFigureBuilder:
 
         for label in sorted(markers_by_label.keys()):
             events = markers_by_label[label]
-            _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+            _ = self._fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                 go.Scatter(
                     x=[to_datetime(e.t_ms) for e in events],
                     y=[str(e.slot) for e in events],
@@ -130,13 +131,20 @@ class SummaryFigureBuilder:
                     ),
                     name=label,
                     legendgroup=f"m:{label}",
-                    customdata=[[self.valgroup_id, e.slot, to_datetime(e.t_ms).strftime("%H:%M:%S.%f")] for e in events],
-                    hovertemplate=f"valgroup={self.valgroup_id}<br>slot=%{{customdata[1]}}<br>marker={label}<br>t=%{{customdata[2]}}<extra></extra>",
+                    customdata=[[self.valgroup_id, e.slot, to_datetime(e.t_ms).strftime("%H:%M:%S.%f"), self._slot_dict[e.slot].block_id()] for e in events],
+                    hovertemplate=f"valgroup={self.valgroup_id}<br>slot=%{{customdata[1]}}<br>marker={label}<br>t=%{{customdata[2]}}<br>block_id=%{{customdata[3]}}<extra></extra>",
                 )
             )
 
     def _configure_layout(self, slot_from: int, slot_to: int) -> None:
-        _ = self.fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
+        _ = self._fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
+            title=dict(
+                text=f"Summary — valgroup ({self.valgroup_id}) · slots from {slot_from} to {slot_to}",
+                xanchor="center",
+                yanchor="top",
+                x=0.5,
+                font=dict(size=14),
+            ),
             height=600,
             barmode="overlay",
             bargap=0.25,
@@ -159,7 +167,7 @@ class DetailFigureBuilder:
         self.valgroup_id: str = valgroup_id
         self.slot: SlotData = slot
         self.time_mode: str = time_mode
-        self.fig = go.Figure()
+        self._fig = go.Figure()
 
     def build(
         self,
@@ -169,7 +177,7 @@ class DetailFigureBuilder:
         self._add_baseline_markers(markers)
         self._add_validator_events(events)
         self._configure_layout(events)
-        return self.fig
+        return self._fig
 
     def _add_baseline_markers(
         self, markers: list[EventData]
@@ -181,8 +189,8 @@ class DetailFigureBuilder:
                 else to_relative(m.t_ms, self.slot.slot_start_est_ms)
             )
 
-            self.fig = self.fig.add_vline(x=x, line_width=1, line_dash="dot")  # pyright: ignore[reportUnknownMemberType]
-            self.fig = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+            _ = self._fig.add_vline(x=x, line_width=1, line_dash="dot")  # pyright: ignore[reportUnknownMemberType]
+            _ = self._fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                 go.Scatter(
                     x=[x],
                     y=["__slot__"],
@@ -247,7 +255,7 @@ class DetailFigureBuilder:
             )
 
             if label not in ("skip_observed", "candidate_received"):
-                _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+                _ = self._fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                     go.Bar(
                         orientation="h",
                         base=base,
@@ -268,7 +276,7 @@ class DetailFigureBuilder:
                     )
                 )
             else:
-                _ = self.fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
+                _ = self._fig.add_trace(  # pyright: ignore[reportUnknownMemberType]
                     go.Scatter(
                         x=base,
                         y=[e.validator for e in label_events],
@@ -295,19 +303,25 @@ class DetailFigureBuilder:
         self,
         events: list[EventData],
     ) -> None:
-        title_parts = [f"Detail — ({self.valgroup_id}) slot {self.slot.slot}"]
+        title = f"Detail — valgroup ({self.valgroup_id}) slot {self.slot.slot}"
         if self.slot.is_empty:
-            title_parts.append("empty")
-        if self.slot.block_id:
-            title_parts.append(f"block={self.slot.block_id}")
+            title += " · empty"
         if self.slot.collator is not None:
-            title_parts.append(f"collator={self.slot.collator}")
+            title += f" · collator={self.slot.collator}"
+        if self.slot.block_id_ext:
+            title += f"<br>block={self.slot.block_id_ext}"
 
         validators = sorted({e.validator for e in events if e.validator is not None})
         x_title = "t - slot_start_est (ms)" if self.time_mode == "rel" else "Time (UTC)"
 
-        _ = self.fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
-            title=" · ".join(title_parts),
+        _ = self._fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
+            title=dict(
+                text=title,
+                xanchor="center",
+                yanchor="top",
+                x=0.5,
+                font=dict(size=14),
+            ),
             height=820,
             hovermode="closest",
             barmode="overlay",
@@ -341,6 +355,7 @@ class FigureBuilder:
     ) -> go.Figure:
         slots = self.filter.filter_slots(valgroup_id, slot_from, slot_to, show_empty)
         slot_set = {s.slot for s in slots}
+        slot_dict = {s.slot: s for s in slots}
 
         segments = self.filter.filter_events(
             valgroup_id=valgroup_id,
@@ -355,7 +370,7 @@ class FigureBuilder:
             kinds={"estimate", "observed"},
         )
 
-        builder = SummaryFigureBuilder(valgroup_id)
+        builder = SummaryFigureBuilder(valgroup_id, slot_dict)
         return builder.build(segments, markers, slot_from, slot_to)
 
     def build_detail(

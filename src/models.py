@@ -7,8 +7,11 @@ class SlotData:
     slot: int
     is_empty: bool
     slot_start_est_ms: float
-    block_id: str | None
+    block_id_ext: str | None
     collator: int | str | None
+
+    def block_id(self) -> str | None:
+        return self.block_id_ext.split(':')[0] if self.block_id_ext else None
 
 
 @dataclass
