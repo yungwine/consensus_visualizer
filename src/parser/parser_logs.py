@@ -32,14 +32,14 @@ TARGET_TO_LABEL = {
 @final
 class ParserLogs(Parser):
     def __init__(self, logs_path: list[Path]):
-        self.logs_path = logs_path
-        self.slots: dict[slot_id_type, SlotData] = {}
-        self.collated: dict[slot_id_type, dict[str, EventData]] = {}
-        self.votes: dict[slot_id_type, dict[str, list[VoteData]]] = {}
-        self.total_weights: dict[str, int] = {}
-        self.slot_leaders: dict[slot_id_type, int] = {}
-        self.slot_events: dict[slot_id_type, dict[int, dict[str, EventData]]] = {}
-        self.events: list[EventData] = []
+        self._logs_path = logs_path
+        self._slots: dict[slot_id_type, SlotData] = {}
+        self._collated: dict[slot_id_type, dict[str, EventData]] = {}
+        self._votes: dict[slot_id_type, dict[str, list[VoteData]]] = {}
+        self._total_weights: dict[str, int] = {}
+        self._slot_leaders: dict[slot_id_type, int] = {}
+        self._slot_events: dict[slot_id_type, dict[int, dict[str, EventData]]] = {}
+        self._events: list[EventData] = []
 
     def _parse_stats_target_reached(
         self,
@@ -58,8 +58,8 @@ class ParserLogs(Parser):
         slot = int(stats_match.group(2))
         slot_id = (v_group, slot)
 
-        if slot_id not in self.slots:
-            self.slots[slot_id] = SlotData(
+        if slot_id not in self._slots:
+            self._slots[slot_id] = SlotData(
                 valgroup_id=v_group,
                 slot=slot,
                 is_empty=False,
@@ -68,18 +68,18 @@ class ParserLogs(Parser):
                 collator=None,
             )
 
-        self.slots[slot_id].slot_start_est_ms = min(
-            t_ms, self.slots[slot_id].slot_start_est_ms
+        self._slots[slot_id].slot_start_est_ms = min(
+            t_ms, self._slots[slot_id].slot_start_est_ms
         )
 
         if target == "CollateStarted":
-            self.slots[slot_id].collator = v_id
+            self._slots[slot_id].collator = v_id
 
         if (
             target == "FinalObserved"
-            and self.slot_leaders.get((v_group, slot + 1)) == v_id
+            and self._slot_leaders.get((v_group, slot + 1)) == v_id
         ):
-            self.events.append(
+            self._events.append(
                 EventData(
                     valgroup_id=v_group,
                     slot=slot,
@@ -101,13 +101,13 @@ class ParserLogs(Parser):
                 validator=v_id,
                 t1_ms=None,
             )
-            self.slot_events.setdefault(slot_id, {}).setdefault(v_id, {})[label] = ev
+            self._slot_events.setdefault(slot_id, {}).setdefault(v_id, {})[label] = ev
 
             if label == "candidate_received":
-                self.events.append(ev)
+                self._events.append(ev)
 
             if label in ("collate_started", "collate_finished"):
-                self.collated.setdefault(slot_id, {})[label] = ev
+                self._collated.setdefault(slot_id, {})[label] = ev
 
     def _parse_skip_vote(self, line: str, t_ms: float, v_group: str, v_id: int):
         slot_match = re.search(r"slot=(\d+)", line)
@@ -116,7 +116,7 @@ class ParserLogs(Parser):
         slot = int(slot_match.group(1))
         slot_id = (v_group, slot)
 
-        self.events.append(
+        self._events.append(
             EventData(
                 valgroup_id=v_group,
                 slot=slot,
@@ -127,8 +127,8 @@ class ParserLogs(Parser):
             )
         )
 
-        if slot_id not in self.slots:
-            self.slots[slot_id] = SlotData(
+        if slot_id not in self._slots:
+            self._slots[slot_id] = SlotData(
                 valgroup_id=v_group,
                 slot=slot,
                 is_empty=True,
@@ -137,7 +137,7 @@ class ParserLogs(Parser):
                 collator=None,
             )
         else:
-            self.slots[slot_id].is_empty = True
+            self._slots[slot_id].is_empty = True
 
     def _parse_publish_event(
         self, line: str, t_ms: float, v_group: str, v_id: int, v_weights: dict[str, int]
@@ -152,7 +152,7 @@ class ParserLogs(Parser):
             assert vote_match is not None
             vote = vote_match.group(1)
 
-            self.votes.setdefault(slot_id, {}).setdefault(vote, []).append(
+            self._votes.setdefault(slot_id, {}).setdefault(vote, []).append(
                 VoteData(vote=vote, t_ms=t_ms, v_id=v_id, weight=v_weights[v_group])
             )
 
@@ -166,7 +166,7 @@ class ParserLogs(Parser):
             end_slot = int(end_slot_match.group(1))
 
             for s in range(start_slot, end_slot):
-                self.slot_leaders[(v_group, s)] = v_id
+                self._slot_leaders[(v_group, s)] = v_id
         elif "BlockFinalized" in line and not 'BlockFinalizedInMasterchain' in line:
             slot_match = re.search(r"candidate=Candidate\{id=\{(\d+)", line)
             assert slot_match is not None
@@ -175,17 +175,17 @@ class ParserLogs(Parser):
             block_id_match = re.search(r"(\([^)]+\):[A-F0-9]+:[A-F0-9]+)", line)
             assert block_id_match is not None
             block_id = block_id_match.group(0)
-            self.slots[slot_id].block_id_ext = block_id
+            self._slots[slot_id].block_id_ext = block_id
 
     def _infer_slot_events(self) -> None:
-        for s in self.slot_events.values():
+        for s in self._slot_events.values():
             for v_id, events in s.items():
                 for start_event_name, end_event_name, label in (('collate_started', 'collate_finished', 'collation'), ('validate_started', 'validate_finished', 'block_validation'), ('notarize_observed', 'finalize_observed', 'finalization')):
                     if start_event_name not in events or end_event_name not in events:
                         continue
                     e = events[start_event_name]
                     end_event = events.get(end_event_name)
-                    self.events.append(
+                    self._events.append(
                         EventData(
                             valgroup_id=e.valgroup_id,
                             slot=e.slot,
@@ -198,8 +198,8 @@ class ParserLogs(Parser):
                     )
 
     def _infer_slot_phases(self):
-        for slot_id, slot_data in self.slots.items():
-            self.events.append(
+        for slot_id, slot_data in self._slots.items():
+            self._events.append(
                 EventData(
                     valgroup_id=slot_data.valgroup_id,
                     slot=slot_data.slot,
@@ -212,13 +212,13 @@ class ParserLogs(Parser):
             collate_start = None
             collate_end = None
             if (
-                slot_id in self.collated
-                and "collate_started" in self.collated[slot_id]
-                and "collate_finished" in self.collated[slot_id]
+                slot_id in self._collated
+                and "collate_started" in self._collated[slot_id]
+                and "collate_finished" in self._collated[slot_id]
             ):
-                collate_start = self.collated[slot_id]["collate_started"].t_ms
-                collate_end = self.collated[slot_id]["collate_finished"].t_ms
-                self.events.append(
+                collate_start = self._collated[slot_id]["collate_started"].t_ms
+                collate_end = self._collated[slot_id]["collate_finished"].t_ms
+                self._events.append(
                     EventData(
                         valgroup_id=slot_data.valgroup_id,
                         slot=slot_data.slot,
@@ -229,27 +229,27 @@ class ParserLogs(Parser):
                     )
                 )
 
-            total_weight = self.total_weights[slot_id[0]]
+            total_weight = self._total_weights[slot_id[0]]
             weight_threshold = (total_weight * 2) // 3 + 1
 
             notarize_reached = None
-            if slot_id in self.votes and "NotarizeVote" in self.votes[slot_id] and collate_end is not None:
+            if slot_id in self._votes and "NotarizeVote" in self._votes[slot_id] and collate_end is not None:
                 notarize_reached = self._process_vote_threshold(
                     slot_data=slot_data,
-                    votes=self.votes[slot_id]["NotarizeVote"],
+                    votes=self._votes[slot_id]["NotarizeVote"],
                     weight_threshold=weight_threshold,
                     label="notarize",
                     phase_start=collate_end,
                 )
 
             if (
-                slot_id in self.votes
-                and "FinalizeVote" in self.votes[slot_id]
+                slot_id in self._votes
+                and "FinalizeVote" in self._votes[slot_id]
                 and notarize_reached is not None
             ):
                 _ = self._process_vote_threshold(
                     slot_data=slot_data,
-                    votes=self.votes[slot_id]["FinalizeVote"],
+                    votes=self._votes[slot_id]["FinalizeVote"],
                     weight_threshold=weight_threshold,
                     label="finalize",
                     phase_start=notarize_reached,
@@ -269,7 +269,7 @@ class ParserLogs(Parser):
         for vote in sorted_votes:
             current_weight += vote.weight
             if current_weight >= weight_threshold:
-                self.events.append(
+                self._events.append(
                     EventData(
                         valgroup_id=slot_data.valgroup_id,
                         slot=slot_data.slot,
@@ -280,7 +280,7 @@ class ParserLogs(Parser):
                         t1_ms=None,
                     )
                 )
-                self.events.append(
+                self._events.append(
                     EventData(
                         valgroup_id=slot_data.valgroup_id,
                         slot=slot_data.slot,
@@ -333,7 +333,7 @@ class ParserLogs(Parser):
 
         total_weight_match = re.search(r"out of (\d+)", line)
         assert total_weight_match is not None
-        self.total_weights[v_group] = int(total_weight_match.group(1))
+        self._total_weights[v_group] = int(total_weight_match.group(1))
 
     def _process_log_line(
         self,
@@ -356,7 +356,7 @@ class ParserLogs(Parser):
 
     @override
     def parse(self) -> ConsensusData:
-        for log_file in self.logs_path:
+        for log_file in self._logs_path:
             data = log_file.read_text().splitlines()
 
             v_groups: dict[str, int] = {}
@@ -378,4 +378,4 @@ class ParserLogs(Parser):
         self._infer_slot_phases()
         self._infer_slot_events()
 
-        return ConsensusData(slots=list(self.slots.values()), events=self.events)
+        return ConsensusData(slots=list(self._slots.values()), events=self._events)

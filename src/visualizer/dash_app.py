@@ -9,21 +9,21 @@ from src.visualizer.figure_builder import FigureBuilder
 
 
 class DashApp:
-    def __init__(self, data: ConsensusData, title: str = "Consensus Explorer"):
-        self.data: ConsensusData = data
-        self.builder: FigureBuilder = FigureBuilder(data)
-        self.app: Dash = Dash(__name__)
-        self.app.title = title
+    def __init__(self, data: ConsensusData):
+        self._data: ConsensusData = data
+        self._builder: FigureBuilder = FigureBuilder(data)
+        self._app: Dash = Dash(__name__)
 
-    def run(self, debug: bool = True) -> None:
+    def run(self, debug: bool = True, host: str = "127.0.0.1", port: int = 8050) -> None:
         self._setup_layout()
         self._setup_callbacks()
-        self.app.run(debug=debug)  # pyright: ignore[reportUnknownMemberType]
+        self._app.run(debug=debug, host=host, port=port)  # pyright: ignore[reportUnknownMemberType]
 
     def _setup_layout(self) -> None:
-        valgroups = sorted(set(s.valgroup_id for s in self.data.slots))
+        valgroups = sorted(set(s.valgroup_id for s in self._data.slots))
 
-        self.app.layout = html.Div(
+        self._app.title = "Consensus Explorer"
+        self._app.layout = html.Div(
             [
                 html.Div(
                     [
@@ -205,7 +205,7 @@ class DashApp:
         slot_from = slot_from or 0
         slot_to = slot_to or slot_from
 
-        group_slots = [s for s in self.data.slots if s.valgroup_id == group]
+        group_slots = [s for s in self._data.slots if s.valgroup_id == group]
         max_slot = max((s.slot for s in group_slots), default=0)
         slot_from = max(0, min(int(slot_from), max_slot))
         slot_to = max(0, min(int(slot_to), max_slot))
@@ -216,7 +216,7 @@ class DashApp:
 
         slots = [
             s
-            for s in self.data.slots
+            for s in self._data.slots
             if s.valgroup_id == group
             and slot_from <= s.slot <= slot_to
             and (show_empty or not s.is_empty)
@@ -232,7 +232,7 @@ class DashApp:
                 pick = non_empty[0].slot if non_empty else slots[0].slot
                 selected = {"valgroup_id": group, "slot": pick}
 
-        fig = self.builder.build_summary(group, slot_from, slot_to, show_empty)
+        fig = self._builder.build_summary(group, slot_from, slot_to, show_empty)
         return fig, selected
 
     def _update_detail(
@@ -244,7 +244,7 @@ class DashApp:
         assert isinstance(valgroup_id, str)
         slot = int(selected["slot"])
 
-        fig = self.builder.build_detail(
+        fig = self._builder.build_detail(
             valgroup_id, slot, time_mode
         )
         return fig, f"selected: {valgroup_id} slot {slot}"
@@ -273,7 +273,7 @@ class DashApp:
         return selected
 
     def _setup_callbacks(self) -> None:
-        self.app.callback(  # pyright: ignore[reportUnknownMemberType]
+        self._app.callback(  # pyright: ignore[reportUnknownMemberType]
             Output("summary", "figure"),
             Output("selected", "data"),
             Input("group", "value"),
@@ -283,21 +283,21 @@ class DashApp:
             State("selected", "data"),
         )(self._update_summary)
 
-        self.app.callback(  # pyright: ignore[reportUnknownMemberType]
+        self._app.callback(  # pyright: ignore[reportUnknownMemberType]
             Output("selected", "data", allow_duplicate=True),
             Input("summary", "clickData"),
             State("group", "value"),
             prevent_initial_call=True,
         )(self._update_selection_from_click)
 
-        self.app.callback(  # pyright: ignore[reportUnknownMemberType]
+        self._app.callback(  # pyright: ignore[reportUnknownMemberType]
             Output("detail", "figure"),
             Output("selection", "children"),
             Input("selected", "data"),
             Input("time-mode", "value"),
         )(self._update_detail)
 
-        self.app.callback(  # pyright: ignore[reportUnknownMemberType]
+        self._app.callback(  # pyright: ignore[reportUnknownMemberType]
             Output("selected", "data", allow_duplicate=True),
             Input("prev-slot-btn", "n_clicks"),
             Input("next-slot-btn", "n_clicks"),
