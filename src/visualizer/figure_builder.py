@@ -105,7 +105,12 @@ class SummaryFigureBuilder:
                     name=label,
                     marker=dict(color=events[0].get_color()),
                     customdata=[
-                        [self._valgroup_id, e.slot, e.t1_ms - e.t_ms if e.t1_ms else 0, self._slot_dict[e.slot].block_id()]
+                        [
+                            self._valgroup_id,
+                            e.slot,
+                            e.t1_ms - e.t_ms if e.t1_ms else 0,
+                            self._slot_dict[e.slot].block_id(),
+                        ]
                         for e in events
                     ],
                     hovertemplate=f"valgroup={self._valgroup_id}<br>slot=%{{customdata[1]}}<br>segment={label}<br>start=%{{base|%H:%M:%S.%f}}<br>dt=%{{customdata[2]:.3f}}ms<br>block_id=%{{customdata[3]}}<extra></extra>",
@@ -131,7 +136,15 @@ class SummaryFigureBuilder:
                     ),
                     name=label,
                     legendgroup=f"m:{label}",
-                    customdata=[[self._valgroup_id, e.slot, to_datetime(e.t_ms).strftime("%H:%M:%S.%f"), self._slot_dict[e.slot].block_id()] for e in events],
+                    customdata=[
+                        [
+                            self._valgroup_id,
+                            e.slot,
+                            to_datetime(e.t_ms).strftime("%H:%M:%S.%f"),
+                            self._slot_dict[e.slot].block_id(),
+                        ]
+                        for e in events
+                    ],
                     hovertemplate=f"valgroup={self._valgroup_id}<br>slot=%{{customdata[1]}}<br>marker={label}<br>t=%{{customdata[2]}}<br>block_id=%{{customdata[3]}}<extra></extra>",
                 )
             )
@@ -179,9 +192,7 @@ class DetailFigureBuilder:
         self._configure_layout(events)
         return self._fig
 
-    def _add_baseline_markers(
-        self, markers: list[EventData]
-    ) -> None:
+    def _add_baseline_markers(self, markers: list[EventData]) -> None:
         for m in markers:
             x = (
                 to_datetime(m.t_ms)
@@ -205,18 +216,16 @@ class DetailFigureBuilder:
                     showlegend=True,
                     customdata=[[m.label, x]],
                     hovertemplate="slot: %{customdata[0]}<br>"
-                                  + (
-                                    "t=%{customdata[1]|%H:%M:%S.%f}<br>"
-                                    if self._time_mode == "abs"
-                                    else "t=%{customdata[1]}ms<br>"
-                                    )
-                                    +"<extra></extra>",
+                    + (
+                        "t=%{customdata[1]|%H:%M:%S.%f}<br>"
+                        if self._time_mode == "abs"
+                        else "t=%{customdata[1]}ms<br>"
+                    )
+                    + "<extra></extra>",
                 )
             )
 
-    def _add_validator_events(
-        self, events: list[EventData]
-    ) -> None:
+    def _add_validator_events(self, events: list[EventData]) -> None:
         events_by_label = DataFilter.group_events_by_label(events)
 
         for label in sorted(events_by_label.keys()):
@@ -234,7 +243,10 @@ class DetailFigureBuilder:
                 base = [to_datetime(e.t_ms) for e in label_events]
                 x = [e.t1_ms - e.t_ms if e.t1_ms else 0 for e in label_events]
             else:
-                base = [to_relative(e.t_ms, self._slot.slot_start_est_ms) for e in label_events]
+                base = [
+                    to_relative(e.t_ms, self._slot.slot_start_est_ms)
+                    for e in label_events
+                ]
                 x = [e.t1_ms - e.t_ms if e.t1_ms else 0 for e in label_events]
 
             kwargs = dict(
@@ -248,7 +260,7 @@ class DetailFigureBuilder:
                         label,
                         e.kind,
                         e.t1_ms - e.t_ms if e.t1_ms else 0,
-                        b
+                        b,
                     ]
                     for e, b in zip(label_events, base)
                 ],
@@ -312,7 +324,9 @@ class DetailFigureBuilder:
             title += f"<br>block={self._slot.block_id_ext}"
 
         validators = sorted({e.validator for e in events if e.validator is not None})
-        x_title = "t - slot_start_est (ms)" if self._time_mode == "rel" else "Time (UTC)"
+        x_title = (
+            "t - slot_start_est (ms)" if self._time_mode == "rel" else "Time (UTC)"
+        )
 
         _ = self._fig.update_layout(  # pyright: ignore[reportUnknownMemberType]
             title=dict(
@@ -397,7 +411,7 @@ class FigureBuilder:
             valgroup_id=valgroup_id,
             slot=slot,
             has_validator=False,
-            kinds={'observed', 'reached'}
+            kinds={"observed", "reached"},
         )
 
         builder = DetailFigureBuilder(valgroup_id, slot_data, time_mode)

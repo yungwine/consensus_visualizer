@@ -14,7 +14,9 @@ class DashApp:
         self._builder: FigureBuilder = FigureBuilder(data)
         self._app: Dash = Dash(__name__)
 
-    def run(self, debug: bool = True, host: str = "127.0.0.1", port: int = 8050) -> None:
+    def run(
+        self, debug: bool = True, host: str = "127.0.0.1", port: int = 8050
+    ) -> None:
         self._setup_layout()
         self._setup_callbacks()
         self._app.run(debug=debug, host=host, port=port)  # pyright: ignore[reportUnknownMemberType]
@@ -182,8 +184,9 @@ class DashApp:
 
     @staticmethod
     def _update_selection_from_click(
-            clickData: dict[str, list[dict[str, int | dict[str, int] | list[str | int]]]] | None,
-            group: str,
+        clickData: dict[str, list[dict[str, int | dict[str, int] | list[str | int]]]]
+        | None,
+        group: str,
     ) -> dict[str, str | int]:
         if not clickData:
             raise PreventUpdate
@@ -244,9 +247,7 @@ class DashApp:
         assert isinstance(valgroup_id, str)
         slot = int(selected["slot"])
 
-        fig = self._builder.build_detail(
-            valgroup_id, slot, time_mode
-        )
+        fig = self._builder.build_detail(valgroup_id, slot, time_mode)
         return fig, f"selected: {valgroup_id} slot {slot}"
 
     @staticmethod
@@ -255,7 +256,6 @@ class DashApp:
         _next: int,
         selected: dict[str, str | int],
     ) -> dict[str, str | int]:
-
         ctx = callback_context
         if not ctx.triggered:
             return selected

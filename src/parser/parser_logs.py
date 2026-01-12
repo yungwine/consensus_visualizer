@@ -167,7 +167,7 @@ class ParserLogs(Parser):
 
             for s in range(start_slot, end_slot):
                 self._slot_leaders[(v_group, s)] = v_id
-        elif "BlockFinalized" in line and not 'BlockFinalizedInMasterchain' in line:
+        elif "BlockFinalized" in line and not "BlockFinalizedInMasterchain" in line:
             slot_match = re.search(r"candidate=Candidate\{id=\{(\d+)", line)
             assert slot_match is not None
             slot = int(slot_match.group(1))
@@ -180,7 +180,11 @@ class ParserLogs(Parser):
     def _infer_slot_events(self) -> None:
         for s in self._slot_events.values():
             for v_id, events in s.items():
-                for start_event_name, end_event_name, label in (('collate_started', 'collate_finished', 'collation'), ('validate_started', 'validate_finished', 'block_validation'), ('notarize_observed', 'finalize_observed', 'finalization')):
+                for start_event_name, end_event_name, label in (
+                    ("collate_started", "collate_finished", "collation"),
+                    ("validate_started", "validate_finished", "block_validation"),
+                    ("notarize_observed", "finalize_observed", "finalization"),
+                ):
                     if start_event_name not in events or end_event_name not in events:
                         continue
                     e = events[start_event_name]
@@ -233,7 +237,11 @@ class ParserLogs(Parser):
             weight_threshold = (total_weight * 2) // 3 + 1
 
             notarize_reached = None
-            if slot_id in self._votes and "NotarizeVote" in self._votes[slot_id] and collate_end is not None:
+            if (
+                slot_id in self._votes
+                and "NotarizeVote" in self._votes[slot_id]
+                and collate_end is not None
+            ):
                 notarize_reached = self._process_vote_threshold(
                     slot_data=slot_data,
                     votes=self._votes[slot_id]["NotarizeVote"],

@@ -11,7 +11,7 @@ class SlotData:
     collator: int | str | None
 
     def block_id(self) -> str | None:
-        return self.block_id_ext.split(':')[0] if self.block_id_ext else None
+        return self.block_id_ext.split(":")[0] if self.block_id_ext else None
 
 
 @dataclass
